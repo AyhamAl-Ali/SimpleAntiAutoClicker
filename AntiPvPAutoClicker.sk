@@ -1,0 +1,107 @@
+#! Quick and simple Anti Auto clicker made by SkriptDev (Ayham Al Ali)
+#! 19th of Feb 21
+#! Updated: 5th April 2021
+
+options:
+	CPSLimit: 20 # 20 cps to trigger this script (Might be hacking)
+	CPSLimitMsg: &c[AAC] &f%{_p}% &chas reached &f%{AntiAutoClicker::%{_p}%::clicks}%&c CPS! &7(&f%{_type}%&7) &7&o(Might be hacking)
+
+	highCPSLimit: 25 # This is considered as very high CPS (Probably Hacking)
+	highCPSLimitMsg: &c[AAC] &f%{_p}% &chas reached &e%{AntiAutoClicker::%{_p}%::clicks}%&c CPS! &7(&f%{_type}%&7) &7&o(Probably hacking)
+
+	AutoBan: false
+	AutoBanWarningCount: 3 # how many times a player must reach highCPSLimit until they get auto banned
+
+	resetEveryTicks: 23 ticks # CPS means Clicks Per Second, and second is equal to 20 ticks, but this is set to 23 ticks by default to allow the script to print CPS higher than 20 since it resets every 20 ticks it won't be able to get clicks higher than # 25 ticks
+
+	toolTip: &eClick to spectate this player
+	suggestedCommand: /spectate %{_p}%
+
+	seePermisison: aac.see
+
+	banCommand: ban %{_p}% autoclicking/ka (%{AntiAutoClicker::%{_p}%::clicks}%) (by AAC)
+
+	actionBarCPSCounter: &cCPS: &f%{AntiAutoClicker::%{_p}%::clicks}%
+
+	waitTicksBeforeSendingLimitMsg: 3 ticks # this will allow the script to print cps higher than 20 - add this value to resetEveryTicks
+
+	stopIfDamageEventCancelled: true # stop AAC if damage event is cancelled by another plugin
+
+
+function aacCheck(p: player, type: text):
+	{AAC::exempt::*} doesn't contain {_p}
+	set {_pU} to uuid of {_p}
+
+	# reset data
+	if (difference between {AntiAutoClicker::%{_p}%::last-date} and now) ? {@resetEveryTicks} >= {@resetEveryTicks}:
+		set {AntiAutoClicker::%{_p}%::last-date} to now
+		delete {AntiAutoClicker::%{_p}%::clicks}
+		delete {AntiAutoClicker::%{_p}%::msg-sent}
+
+	add 1 to {AntiAutoClicker::%{_p}%::clicks}
+	send action bar "{@actionBarCPSCounter}" to {_p} if {AntiAutoClicker::playerdata::%{_pU}%::toggle} = true
+	#wait 3 ticks # this will allow to print the cps even 20+
+
+	if {AntiAutoClicker::%{_p}%::clicks} >= {@highCPSLimit}:
+		add 1 to {AntiAutoClicker::%{_p}%::warns} # to ban player after 3 times getting AAC warn
+		{AntiAutoClicker::%{_p}%::warns} >= {@AutoBanWarningCount}
+
+		wait {@waitTicksBeforeSendingLimitMsg}
+		send formatted "<ttp:{@toolTip}><sgt:{@suggestedCommand}>{@highCPSLimitMsg}" to all players where [input has permission "{@seePermisison}"]
+		delete {AntiAutoClicker::%{_p}%::warns}
+		console command "{@banCommand}"
+
+	# just to send this message if cps above 20
+	if {AntiAutoClicker::%{_p}%::clicks} >= {@CPSLimit}:
+		if {AntiAutoClicker::%{_p}%::msg-sent} is not set: # prevent spamming this message
+			set {AntiAutoClicker::%{_p}%::msg-sent} to true
+			wait {@waitTicksBeforeSendingLimitMsg}
+			send formatted "<ttp:{@toolTip}><sgt:{@suggestedCommand}>{@CPSLimitMsg}" to all players where [input has permission "{@seePermisison}"]
+
+
+on damage: # this doesn't get triggered if event is cancelled by a higher priority plugin such as world guard unless setting Skript's priority to highest
+	attacker is a player
+	victim != attacker # hitting self is not a thing to count
+	projectile != arrow # this caused players to get 100+ cps bec the arrow hit was cancelled and arrow kept bouncing on themselves
+	if {@stopIfDamageEventCancelled} = true:
+		event is cancelled
+		stop
+	aacCheck(attacker, "damage")
+	
+command /aac [<text=help>] [<offlineplayer>]:
+	permission: aac.use
+	trigger:
+		if arg-1 = "help":
+			send ""
+			send " &c/aac help &7&oShows this message."
+			send " &c/aac toggle &7&oToggle CPS Action bar counter."
+			send " &c/aac exempt <player> &7&oExempt specific players from triggering AAC."
+			send " &c/aac listexempt &7&oShow list of exempted players."
+			send ""
+			stop
+		if arg-1 = "toggle":
+			if {AntiAutoClicker::playerdata::%uuid of player%::toggle} = true:
+				delete {AntiAutoClicker::playerdata::%uuid of player%::toggle}
+				send "&cCPS counter has been disabled."
+				stop
+			else:
+				set {AntiAutoClicker::playerdata::%uuid of player%::toggle} to true
+				send "&aCPS counter has been enabled."
+				stop
+
+		if arg-1 = "exempt":
+			if arg-2 is not set:
+				send "&cMissing player name."
+				stop
+			if {AAC::exempt::*} doesn't contain arg-2:
+				add arg-2 to {AAC::exempt::*}
+				send "&aAdded &f%arg-2% &ato AAC exempt list."
+				stop
+			else:
+				remove arg-2 from {AAC::exempt::*}
+				send "&eRemoved &f%arg-2% &efrom AAC exempt list."
+				stop
+
+		if arg-1 = "listexempt":
+			send "&eAAC Exempt list: &f%{AAC::exempt::*}%"
+			stop	
